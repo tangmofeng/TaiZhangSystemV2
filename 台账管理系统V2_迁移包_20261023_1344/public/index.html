@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="renderer" content="webkit">
+<!-- 火狐缓存适配：告知浏览器页面永不缓存，避免加载旧版界面 -->
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>信息中心设备及备件台账管理系统 V2</title>
+<link rel="stylesheet" href="vendor/quill/quill.snow.css">
+<link rel="stylesheet" href="css/style.css?v=20261021m01">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📋</text></svg>">
+<style>
+  #bootScreen{ position:fixed; inset:0; z-index:9999; background:linear-gradient(135deg,#1e1b4b,#3730a3 60%,#4f46e5);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; transition:opacity .3s; }
+  #bootScreen .b-logo{ font-size:52px; animation:bounce 1s infinite ease-in-out; }
+  #bootScreen .b-text{ color:#e0e7ff; font-size:14px; letter-spacing:1px; }
+  #bootScreen .b-bar{ width:160px; height:4px; border-radius:4px; background:rgba(255,255,255,.15); overflow:hidden; }
+  #bootScreen .b-bar i{ display:block; height:100%; width:40%; border-radius:4px; background:linear-gradient(90deg,#818cf8,#a5b4fc); animation:slide 1.1s infinite ease-in-out; }
+  @keyframes bounce{ 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(-10px); } }
+  @keyframes slide{ 0%{ margin-left:-40%; } 100%{ margin-left:100%; } }
+</style>
+</head>
+<body>
+
+<div id="bootScreen"><div class="b-logo">📋</div><div class="b-text">设备及备件台账管理系统</div><div class="b-bar"><i></i></div></div>
+
+<!-- 登录页 -->
+<div id="loginPage" class="login-page hidden">
+  <div class="login-card">
+    <div class="login-logo">📋</div>
+    <h1>设备及备件台账管理系统</h1>
+    <p class="login-sub">打印机 · 耗材 · 备品备件 · 办公电脑</p>
+    <div class="form-field">
+      <label>用户名</label>
+      <input type="text" id="loginUser" placeholder="请输入用户名" autocomplete="username">
+    </div>
+    <div class="form-field">
+      <label>密码</label>
+      <input type="password" id="loginPass" placeholder="请输入密码" autocomplete="current-password">
+    </div>
+    <button class="btn btn-primary btn-block" id="loginBtn">登 录</button>
+    <p class="login-msg" id="loginMsg"></p>
+  </div>
+</div>
+
+<!-- 主应用 -->
+<div id="app" class="app hidden">
+  <!-- 侧边栏 -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <span class="brand-icon">📋</span>
+      <div class="brand-text">
+        <div class="brand-title">设备台账管理 V2</div>
+        <div class="brand-sub">信息中心</div>
+      </div>
+      <button id="sidebarToggle" class="sidebar-toggle" title="折叠/展开">☰</button>
+    </div>
+    <nav class="nav">
+    <div id="navList">
+      <a class="nav-item active" data-page="dashboard"><span class="nav-ico">🏠</span>工作台</a>
+      <a class="nav-item" data-page="printers"><span class="nav-ico">🖨️</span>打印机管理</a>
+      <a class="nav-item" data-page="consumables"><span class="nav-ico">🧴</span>耗材管理</a>
+      <a class="nav-item" data-page="stats"><span class="nav-ico">💰</span>费用统计</a>
+      <a class="nav-item" data-page="spares"><span class="nav-ico">📦</span>备品备件</a>
+      <a class="nav-item" data-page="computers"><span class="nav-ico">💻</span>办公电脑</a>
+      <a class="nav-item" data-page="pcopt"><span class="nav-ico">🛠️</span>电脑优化</a>
+      <a class="nav-item" data-page="ai"><span class="nav-ico">🤖</span>AI 工作台</a>
+      <a class="nav-item" data-page="system"><span class="nav-ico">⚙️</span>系统管理</a>
+    </div>
+    </nav>
+    <div class="sidebar-user">
+      <div class="user-name" id="sideUserName">管理员</div>
+      <button class="btn btn-ghost btn-sm" id="logoutBtn">退出登录</button>
+    </div>
+  </aside>
+
+  <!-- 主区域 -->
+  <div class="main">
+    <header class="topbar">
+      <button class="btn btn-ghost menu-btn" id="menuBtn">☰</button>
+      <div class="page-title" id="pageTitle">工作台</div>
+      <div class="topbar-right">
+        <span class="topbar-user" id="topUserName">管理员</span>
+      </div>
+    </header>
+
+    <main class="content" id="content">
+      <!-- 各页面容器由 JS 渲染 -->
+    </main>
+  </div>
+</div>
+
+<!-- 通用弹窗 -->
+<div class="modal-mask hidden" id="modalMask">
+  <div class="modal" id="modalBox">
+    <div class="modal-head">
+      <span id="modalTitle">标题</span>
+      <button class="modal-close" id="modalClose">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-foot" id="modalFoot"></div>
+  </div>
+</div>
+
+<!-- 提示 -->
+<div class="toast-wrap" id="toastWrap"></div>
+
+<script src="vendor/quill/quill.js"></script>
+<script src="js/app.js?v=20261023m07"></script>
+</body>
+</html>

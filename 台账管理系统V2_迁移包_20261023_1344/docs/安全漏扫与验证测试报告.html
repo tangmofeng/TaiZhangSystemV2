@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><title>安全漏扫与验证测试报告</title>
+<style>body{font-family:"Microsoft YaHei",sans-serif;max-width:960px;margin:30px auto;padding:0 20px;color:#1e2433;line-height:1.7}h1{color:#4f46e5;border-bottom:2px solid #4f46e5;padding-bottom:8px}h2{color:#4338ca;margin-top:28px}table{width:100%;border-collapse:collapse;margin:12px 0}th,td{border:1px solid #e6e9f0;padding:8px 10px;text-align:left;font-size:14px;vertical-align:top}th{background:#eef2ff}.pass{color:#059669;font-weight:700}.warn{color:#d97706;font-weight:700}</style></head><body>
+<h1>安全漏扫与验证测试报告</h1>
+<p>扫描时间：2026-10-13 ｜ 系统：台账管理系统 V2 ｜ 端口：8090</p>
+<h2>一、漏洞扫描结果</h2>
+<table><tr><th>检查项</th><th>结果</th><th>说明</th></tr>
+<tr><td>SQL 注入</td><td class="pass">通过</td><td>所有 SQL 使用参数化查询，where 拼接字段名固定，无用户输入直接拼 SQL</td></tr>
+<tr><td>XSS 跨站脚本</td><td class="pass">通过</td><td>前端渲染使用文本节点；响应头 CSP 限制脚本来源</td></tr>
+<tr><td>路径穿越</td><td class="pass">通过</td><td>/uploads/<name> 校验 <code>..</code> 和绝对路径前缀，拒绝后返回 400</td></tr>
+<tr><td>未授权访问</td><td class="pass">通过</td><td>所有业务接口加 @require_login；uploads 静态文件也加了登录校验</td></tr>
+<tr><td>CSRF 跨站请求伪造</td><td class="pass">通过</td><td>非 GET 的 /api/ 请求校验 Origin/Referer 与 Host 一致</td></tr>
+<tr><td>安全响应头</td><td class="pass">通过</td><td>X-Frame-Options / X-Content-Type-Options / CSP / Referrer-Policy 已配置</td></tr>
+<tr><td>密码存储</td><td class="pass">通过</td><td>werkzeug scrypt hash，不存明文</td></tr>
+<tr><td>登录爆破</td><td class="pass">通过</td><td>失败 5 次锁定 30 秒</td></tr>
+<tr><td>敏感信息泄露</td><td class="warn">注意</td><td>内网系统，无外网暴露；建议 admin 默认密码登录后立即修改</td></tr>
+</table>
+<h2>二、验证测试</h2>
+<table><tr><th>测试项</th><th>结果</th></tr>
+<tr><td>GET /api/health</td><td class="pass">返回 {"ok":true,"status":"running"}</td></tr>
+<tr><td>未登录访问业务接口</td><td class="pass">返回 401</td></tr>
+<tr><td>上传路径穿越 <code>/uploads/../etc/passwd</code></td><td class="pass">拒绝</td></tr>
+<tr><td>跨域 Origin POST</td><td class="pass">403</td></tr>
+</table>
+<h2>三、建议</h2>
+<ul>
+<li>部署后立即修改 admin 默认密码</li>
+<li>定期备份 data/system.db</li>
+<li>不要把此端口暴露到公网</li>
+</ul>
+<h2>四、2026-10-16 补充扫描与修复</h2>
+<table><tr><th>检查项</th><th>结果</th><th>说明</th></tr>
+<tr><td>CSV 公式注入</td><td class="warn">已修复</td><td>原 <code>_csv_download()</code> 导出数据未防御以 = / + / - / @ 开头的内容，Excel 打开时可能被当公式执行。新增 <code>_csv_safe(v)</code> 对每个单元格加单引号前缀，已覆盖全部 CSV 导出入口</td></tr>
+<tr><td>反向标签劫持（tabnabbing）</td><td class="warn">已修复</td><td>AI 工作台 2 处 <code>target="_blank"</code> 外链缺 <code>rel="noopener noreferrer"</code>，已补齐</td></tr>
+<tr><td>SQL 注入（复查）</td><td class="pass">通过</td><td>复查全部接口参数化查询，动态列名仍来自白名单（耗材 keys/笔记本 keys/id IN/ai_stats period）</td></tr>
+<tr><td>命令注入（复查）</td><td class="pass">通过</td><td>全后端无 os.system/subprocess 调用用户输入</td></tr>
+<tr><td>路径穿越（复查）</td><td class="pass">通过</td><td>uploads 校验 .. 与绝对路径前缀、uuid 文件名、扩展名白名单、登录校验</td></tr>
+<tr><td>前端 XSS（复查）</td><td class="pass">通过</td><td>全模块渲染使用 esc()，确认弹窗唯一内插点已有转义包裹</td></tr>
+<tr><td>前端 JS 语法与运行</td><td class="pass">通过</td><td>node --check 通过；修复「await 后对已重建 DOM 赋值」导致的 TypeError（电脑优化模块渲染中断），浏览器实测全模块渲染正常</td></tr>
+</table>
+<h2>五、2026-10-22 例行漏扫与修复</h2>
+<table><tr><th>检查项</th><th>结果</th><th>说明</th></tr>
+<tr><td>AI 上传接口存储型 XSS</td><td class="warn">已修复</td><td>原 <code>/api/ai/upload</code> 仅用 secure_filename 保存、无扩展名白名单，可上传 .html/.svg 等经 <code>/uploads/ai/&lt;name&gt;</code> 被浏览器直接渲染执行。已加扩展名白名单（png/jpg/jpeg/gif/bmp/webp/xlsx/xls/docx/doc/pdf/txt/csv/md），拒绝可执行脚本类扩展名，前端上传失败有 toast 提示，不影响 AI 附件（图片/文档）功能</td></tr>
+<tr><td>弱口令扫描</td><td class="warn">注意</td><td>扫描 13 个账号：admin 未命中；11 个普通账号（mapengfei、yinyanbin、yangkailin、zhangchenhui、zhudongyuan、guoyunfeng、liuzhonghao、chengpai、zhaohuawei、qixin、litao）仍为初始密码 admin@123（仅查看权限）。建议管理员统一重置并告知同事，本报告不代改他人账号密码</td></tr>
+<tr><td>SQL 注入（复查）</td><td class="pass">通过</td><td>3 处动态 SQL（耗材导入 UPDATE、spare_flows id IN、笔记 UPDATE）均为硬编码字段白名单 + 参数绑定；_ids_arg 对 id 做 isdigit 过滤</td></tr>
+<tr><td>前端 XSS（复查）</td><td class="pass">通过</td><td>TZTable 默认列 esc()，77 处自定义 render 全部核对：文本列均 esc()，statusBadge 兜底 esc()，数字/徽标列为数值或硬编码</td></tr>
+<tr><td>认证授权（复查）</td><td class="pass">通过</td><td>require_login + 模块权限矩阵（view/edit）+ /api/users 仅 admin；未登录访问 /api/dashboard 实测返回 401</td></tr>
+<tr><td>文件上传（复查）</td><td class="pass">通过</td><td>全部 Excel 导入接口校验 .xlsx/.xls；/api/upload 图片白名单 + uuid 文件名；路径穿越拦截（.. 与 / 前缀）+ send_from_directory</td></tr>
+<tr><td>SSRF / AI 配置</td><td class="pass">通过</td><td>AI api_base 仅管理员在系统设置中配置，请求目标由管理员手填；文档提示仅填受信任地址</td></tr>
+<tr><td>Excel 公式注入</td><td class="pass">通过</td><td>CSV 导出已加 <code>_csv_safe</code> 单引号前缀；Excel(xlsx) 导出为 openpyxl 写值（非公式），导入数据为自产台账数据，低危可接受</td></tr>
+<tr><td>访问日志轮转</td><td class="pass">已优化</td><td>启动时 access.log 超过 5MB 自动归档为 access_&lt;日期&gt;.log，防止日志无限膨胀</td></tr>
+<tr><td>备份保留策略</td><td class="pass">已优化</td><td>data/backup 每日自动备份仅保留最近 14 份，已清理 38 份旧备份；20261023 例行维护再次清理过期手动快照（20261021/20261022 两枚）并保持 14 份，回滚统一用 data\backup\ 或 20261023 方案甲快照</td></tr>
+</table>
+<h2>六、建议（补充）</h2>
+<ul>
+<li>11 个普通账号仍为初始密码 admin@123，建议在系统管理-账号管理统一重置后告知对应同事</li>
+<li>AI 在线功能仅配置受信任的 api_base 地址，勿填写公网不可信地址</li>
+<li>系统绑定 0.0.0.0:8090 供内网访问，请勿将该端口映射到公网</li>
+</ul>
+</body></html>

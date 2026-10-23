@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><title>故障处理手册</title>
+<style>body{font-family:"Microsoft YaHei",sans-serif;max-width:960px;margin:30px auto;padding:0 20px;color:#1e2433;line-height:1.7}h1{color:#4f46e5;border-bottom:2px solid #4f46e5;padding-bottom:8px}h2{color:#4338ca;margin-top:28px}table{width:100%;border-collapse:collapse;margin:12px 0}th,td{border:1px solid #e6e9f0;padding:8px 10px;text-align:left;font-size:14px;vertical-align:top}th{background:#eef2ff}code{background:#eef2ff;padding:2px 6px;border-radius:4px;font-size:13px}</style></head><body>
+<h1>故障处理手册</h1>
+<h2>一、打不开页面</h2>
+<table><tr><th>现象</th><th>排查</th></tr>
+<tr><td>浏览器显示"无法访问此网站"</td><td>① 服务器电脑上试 <code>http://127.0.0.1:8090</code>；② 不通则服务没起，见下；③ 通则防火墙问题</td></tr>
+<tr><td>本机通、其他机器不通</td><td>防火墙放行 8090 端口：<code>New-NetFirewallRule -DisplayName "台账V2" -Direction Inbound -LocalPort 8090 -Protocol TCP -Action Allow</code></td></tr>
+<tr><td>服务没起</td><td>见"二、启动失败"</td></tr>
+</table>
+<h2>二、启动失败</h2>
+<ol>
+<li>打开 cmd，运行 <code>python D:\TaiZhangSystemV2\server\app.py</code> 看报错</li>
+<li>常见：<code>ModuleNotFoundError: No module named 'flask'</code> → 装依赖：<code>pip install -r D:\TaiZhangSystemV2\requirements.txt</code></li>
+<li>端口被占：<code>netstat -ano | findstr :8090</code>，杀掉对应 PID</li>
+<li>SQLite 被锁：关掉所有正在访问的浏览器，等 10 秒再启</li>
+</ol>
+<h2>三、admin 密码忘了</h2>
+<p>用 DB Browser for SQLite 打开 <code>data\system.db</code>，在 users 表把密码字段改成 <code>scrypt:32768:8:1$...</code> 形式的 hash；或直接删除用户表所有行，重启后系统自动建 admin/admin123。</p>
+<h2>四、数据错乱</h2>
+<ol>
+<li>停服务</li>
+<li>把 <code>data\system.db</code> 改名备份</li>
+<li>从 <code>data\backup\</code> 复制最近一份 system.db 回来</li>
+<li>启服务</li>
+</ol>
+<h2>五、AI 不回复</h2>
+<ol>
+<li>检查 AI 设置里的 API 地址和 Key 是否正确</li>
+<li>服务器能否访问模型地址：<code>curl http://模型地址/v1/models</code></li>
+<li>选的模型名必须和平台上完全一致</li>
+</ol>
+<h2>六、黑框窗</h2>
+<p>启动时用 <code>-WindowStyle Hidden</code>，不要直接双击 app.py。任务计划里配置为"不管用户是否登录都运行"。</p>
+<h2>七、某模块点击菜单无响应（页面不跳转）</h2>
+<ol>
+<li>现象：点击侧栏某模块（如「电脑优化」），顶部标题和内容不变，其他模块正常</li>
+<li>按 F12 打开浏览器开发者工具 → Console 面板，看是否有 <code>TypeError: Cannot set properties of null (setting 'value')</code> 类报错</li>
+<li>根因（2026-10-16 已修复）：模块渲染函数在等待接口返回后直接对 DOM 元素赋值，若期间页面被并发渲染重建则该元素不存在，抛错中断渲染</li>
+<li>处理：先强刷（Ctrl+F5）加载最新代码；仍复现则看 Console 报错行号，确认 <code>if ($('#xxx'))</code> 容错是否生效；前端文件在 <code>public\js\app.js</code></li>
+</ol>
+<h2>八、导出 CSV 后 Excel 打开显示异常（2026-10-16 修复）</h2>
+<p>导出文件里以 = / + / - / @ 开头的内容会被 Excel 当公式执行。现已自动加单引号前缀（_csv_safe），如遇旧版本导出的文件，属正常历史数据，重新导出即可。</p>
+<h2>九、火狐浏览器一直显示旧版界面（2026-10-16 修复）</h2>
+<ol>
+<li>现象：系统已升级，火狐打开还是旧界面；Chrome 正常</li>
+<li>原因：火狐对带查询参数的资源与启发式缓存策略与 Chrome 不同，旧版自检改用 location.reload() 时火狐可能回退本地缓存</li>
+<li>处理（m11 已内置）：版本自检已改为 cache:'reload' 强制拉取 + 带时间戳的 location.replace 整页替换 + index.html 头部 no-cache meta 标签，打开页面后 5 秒内自动同步到最新版</li>
+<li>极个别顽固情况：火狐地址栏输入 about:config，确认 browser.cache.check_doc_frequency=3；或关闭火狐后删除缓存（设置 → 隐私与安全 → Cookie 和网站数据 → 清除）再打开</li>
+</ol>
+<h2>十、AI 上传提示「文件类型不允许」（2026-10-22 起）</h2>
+<p>AI 对话附件上传仅允许图片（png/jpg/jpeg/gif/bmp/webp）与常见文档（xlsx/xls/docx/doc/pdf/txt/csv/md）。上传 html/js/svg 等可执行脚本类文件会被拒绝（400），这是 2026-10-22 安全加固后的预期行为，不影响正常图片/文档附件。</p>
+<h2>十一、登录提示「尝试过于频繁，请 X 秒后重试」</h2>
+<p>连续 5 次密码错误后该 IP 锁定 30 秒，属登录防爆破保护。等待提示时间后重试即可；如确认密码正确仍频繁出现，检查是否有脚本/工具在自动请求。</p>
+<h2>十二、备份保留与回滚</h2>
+<p>系统每天自动备份到 <code>data\backup\</code>，仅保留最近 14 份（2026-10-22 起，旧备份已清理）。回滚用「四、数据错乱」步骤从 backup 复制。历史手动快照（如单价修正前的 system_backup_20261021_before_price_fix.db）已于 20261023 例行维护清理，回滚一律使用 <code>data\backup\</code> 内最近备份或 <code>data\system_backup_20261023_before_planA.db</code>（方案甲迁移前快照）。</p>
+</body></html>

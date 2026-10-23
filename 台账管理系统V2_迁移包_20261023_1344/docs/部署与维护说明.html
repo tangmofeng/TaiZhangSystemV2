@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><title>部署与维护说明</title>
+<style>body{font-family:"Microsoft YaHei",sans-serif;max-width:960px;margin:30px auto;padding:0 20px;color:#1e2433;line-height:1.7}h1{color:#4f46e5;border-bottom:2px solid #4f46e5;padding-bottom:8px}h2{color:#4338ca;margin-top:28px}ol,ul{padding-left:24px}code{background:#eef2ff;padding:2px 6px;border-radius:4px;font-size:13px}pre{background:#1e2433;color:#e0e7ff;padding:14px;border-radius:8px;overflow:auto;font-size:13px}</style></head><body>
+<h1>部署与维护说明</h1>
+<h2>一、首次部署</h2>
+<ol>
+<li>安装 Python 3.11（勾选 Add to PATH）；离线部署必须用 3.11（wheels 离线包为 cp311 构建）</li>
+<li>解压迁移包到 <code>D:\TaiZhangSystemV2</code></li>
+<li>双击 <code>install.bat</code> 自动装依赖（在线镜像→官方源→离线 wheels 三级兜底）、开防火墙、设开机自启</li>
+<li>浏览器访问 <code>http://服务器IP:8090</code>，admin/admin123 登录</li>
+</ol>
+<h2>二、日常启动/停止</h2>
+<pre>启动：Start-Process python.exe -ArgumentList "D:\TaiZhangSystemV2\server\app.py" -WorkingDirectory "D:\TaiZhangSystemV2" -WindowStyle Hidden
+停止：Get-Process python | Stop-Process -Force</pre>
+<h2>三、开机自启</h2>
+<p>已通过任务计划程序添加，开机自动运行。查看：任务计划程序 → 台账管理系统V2。</p>
+<h2>四、防火墙</h2>
+<p>已放行 8090 端口 TCP。其他机器访问：<code>http://服务器IP:8090</code>。</p>
+<h2>五、升级迁移</h2>
+<ol>
+<li>停服务</li>
+<li>备份 <code>data\system.db</code></li>
+<li>替换 server/ 和 public/ 目录（不要动 data/）</li>
+<li>启动服务</li>
+</ol>
+<h2>六、改 IP/端口</h2>
+<p>端口改 app.py 末尾 <code>app.run(port=8090)</code>，同步改防火墙规则。</p>
+<h2>七、当前版本</h2>
+<p>当前版本 <code>20261023m07</code>（前端缓存版本号；耗材库存区域+库位改造方案甲已完成并随迁移包分发）。版本演进补充：</p>
+<ul>
+<li><b>2026-10-23 例行维护（文档细化 + 废旧数据清理；版本号不变仍 m07）</b>：删除归档日志 data\access_20261022_081154.log 与过期手动快照 system_backup_20261021_before_price_fix.db / system_backup_20261022_before_stock_link.db（回滚统一用 data\backup\ 最近 14 份自动备份或 20261023 方案甲快照）；data\backup 收紧回 14 份；重写《系统文件说明及配置文档.html》——完整目录树、每个文件作用、数据库全部路径（主库/自动备份命名与保留规则/手动快照/密钥/日志轮转/上传目录）与 39 张表分组清单、关键配置、备份恢复、改数方法、常见问题定位；同步修正需求清单/故障处理手册/漏扫报告中旧快照引用。</li>
+<li><b>20261023m07（耗材库存按种类聚合 + 区域库存展开 + 移库）</b>：耗材库存主列表改为<b>每种类一行</b>（合计库存=各区域之和），点操作列「▶ 区域库存」展开该种类 区域×库位 明细，明细行「↔ 移库」可将某区域库位库存转移到另一区域/库位（新增 <code>POST /api/consumables/&lt;cid&gt;/transfer</code>：源行扣减至0自动删行、目标行自动建档累加、写移库(转出)/移库(转入)两条流水、合计库存重算；校验数量为正/目标库位必填/库存充足/同址拒绝）；调整记录页类型下拉补充移库类型。后端确定性验证 11/11 全过，前端实测聚合列表/展开弹窗/移库弹窗/端到端提交均正常（实测数据已恢复，全表一致性 0 差异）。</li>
+<li><b>20261023m06（耗材库存空白修复）</b>：修复 renderConStock 中 isLow 的 const 声明在使用点之后导致的 TDZ ReferenceError（耗材库存页整段渲染中断、表格空白）；isLow 定义上移至使用点之前，浏览器实测统计卡/表格/区域筛选全部正常。</li>
+<li><b>20261023m04/m05（耗材库存区域+库位两级位置，方案甲）</b>：耗材种类主数据唯一（96 类不增加），库存按「区域（中控/办公楼）+库位」分记（consumable_stocks 分表）；耗材库存列表按区域展平（库存(该区域)/合计库存双列 + 区域筛选）；发放/批量发放/编辑/删除全按区域联动扣减回补；库存调整按区域 upsert 自动建档新区库位；入库记录与调整流水带区域+库位（选耗材自动带出，删除按区域回扣）；发放记录加区域列，发放导出/导入模板带区域列且按区域扣减判重；库存导入模板按 种类×区域 展开（先 96 行，导入不翻倍）。升级前备份 <code>data\system_backup_20261023_before_planA.db</code>（方案甲迁移前快照）。</li>
+<li><b>20261022m03（更换记录表单字段下拉选择）</b>：配件更换-更换记录新增/编辑弹窗的部门/位置/配件（类型）/存放位置改为搜索下拉选择（历史数据去重，配件与存放位置并入配件库存建档值），可直接从下拉选到库存条目。</li>
+<li><b>20261022m02（更换记录联动配件库存）</b>：配件更换-更换记录新增/编辑/删除自动联动配件库存——新增按「配件名+存放位置」匹配库存条目并扣减（数量解析"电源:2"→2、"1"→1，非数字串不联动；扣减不足拒绝保存），编辑按差量回补再扣减，删除自动回补；未匹配到库存条目不扣减并提示。</li>
+<li><b>20261022m01（配件更换·显示器联动自动带出）</b>：配件更换-新增更换记录时，「显示器序列号」支持搜索下拉选择（候选=历史更换记录中已登记的序列号去重），选择或输入已登记序列号自动带出该显示器最近一次更换记录的姓名/部门/位置/配件/是否更换/是否返厂/备件数量/存放位置/备注，记录时间保留手工选择。</li>
+<li><b>20261021m01（发放记录编辑 + 单价修正）</b>：耗材管理-发放记录新增「编辑」功能——同耗材改数量自动联动库存（改多补扣、改少回补）、换耗材自动回补旧耗材并扣减新耗材、库存不足拒绝、换耗材自动取新耗材单价；历史 34 条单价为 0 的发放记录中 26 条按耗材主数据/OA 单据补齐单价（8 条无价可查保持 0，按用户要求暂不动），全程只改 price 未动库存，留有回滚快照。</li>
+<li><b>2026-10-22 例行维护（安全加固 + 优化）</b>：AI 上传接口加扩展名白名单（拒绝 html/svg 等可执行脚本类文件，防存储型 XSS，实测 html/svg 400、png 通过）；access.log 超过 5MB 启动时自动归档；每日备份仅保留最近 14 份（原 60 份）；清理根目录残留临时脚本与 38 份旧备份；弱口令扫描发现 11 个普通账号仍为初始密码 admin@123，建议在系统管理-账号管理中统一重置。</li>
+<li>m29~m11 的历次升级说明见迁移包内旧版本文档（TZTable 统一表格引擎、纸质单联动、火狐适配等）。</li>
+</ul>
+<p>升级迁移请直接使用最新迁移包（含最新 public/ 与 server/ 及 wheels 离线依赖，不含真实数据目录）。</p>
+</body></html>

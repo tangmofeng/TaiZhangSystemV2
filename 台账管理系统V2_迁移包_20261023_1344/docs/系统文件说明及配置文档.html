@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><title>系统文件说明及配置文档</title>
+<style>body{font-family:"Microsoft YaHei",sans-serif;max-width:1000px;margin:30px auto;padding:0 20px;color:#1e2433;line-height:1.7}h1{color:#4f46e5;border-bottom:2px solid #4f46e5;padding-bottom:8px}h2{color:#4338ca;margin-top:28px;border-left:4px solid #4338ca;padding-left:10px}h3{color:#4b5563;margin-top:18px}table{width:100%;border-collapse:collapse;margin:12px 0}th,td{border:1px solid #e6e9f0;padding:8px 10px;text-align:left;font-size:14px;vertical-align:top}th{background:#eef2ff}code{background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:13px}pre{background:#0f172a;color:#e2e8f0;padding:14px 16px;border-radius:8px;font-size:13px;overflow-x:auto;line-height:1.6}.tag{display:inline-block;background:#eef2ff;color:#4338ca;border-radius:4px;padding:0 6px;font-size:12px}</style></head><body>
+<h1>系统文件说明及配置文档</h1>
+<p>适用版本 <span class="tag">20261023m07</span> ｜ 部署目录 <code>D:\TaiZhangSystemV2</code> ｜ 端口 8090 ｜ 数据库 <code>data\system.db</code>（SQLite 单文件）</p>
+
+<h2>一、部署目录总览</h2>
+<pre>
+D:\TaiZhangSystemV2\
+├─ install.bat                一键安装/迁移脚本（管理员运行：装依赖→开端口→设自启→启动服务）
+├─ install.ps1                安装辅助脚本（install.bat 调用的 PowerShell 逻辑）
+├─ pack.ps1                   一键打包脚本（本机发布迁移包用：清理→复制→压缩成 zip）
+├─ requirements.txt           Python 依赖清单（flask / openpyxl / python-docx / lxml 等）
+├─ start_server.vbs           无窗口启动后端脚本（pythonw 运行 server\app.py，端口 8090）
+├─ watchdog.py                看门狗（检测 8090 掉线自动拉起服务，pythonw 无窗口运行，写 watchdog.log）
+├─ watchdog.log               看门狗运行日志（每次检测一行，可据此查服务拉起记录）
+├─ install_log.txt            安装日志（install.bat 运行时自动生成，装完后可删）
+├─ data\                      数据目录（数据库、备份、日志、上传文件，见"四、数据库与数据文件"）
+├─ docs\                      文档目录（五份 HTML 说明，见"五、文档目录"）
+├─ public\                    前端静态资源（网页入口与全部渲染逻辑，见"三、代码目录"）
+├─ server\                    后端 Python 源码（Flask 主程序 + 建表 + 纸质单模板，见"三、代码目录"）
+├─ wheels\                    Python 离线依赖包（无网环境安装用，随迁移包分发）
+└─ 软著申请材料\               软件著作权申请文档（源码文档/说明书/申请表，.docx+.pdf 各三份）
+</pre>
+
+<h2>二、根目录文件详解</h2>
+<table>
+<tr><th style="width:22%">文件</th><th>作用</th><th style="width:18%">何时使用</th></tr>
+<tr><td><code>install.bat</code></td><td><b>迁移安装器</b>：自动申请管理员权限 → 定位同目录迁移包 .zip → 备份旧目录（改名为 TaiZhangSystemV2_old_日期时间）→ 解压 → 定位 Python（312/311/310 依次探测，找不到自动下载安装 3.12）→ pip 安装依赖（清华镜像 → 官方源 → wheels 离线包三级回退）→ 写 start_server.vbs + 注册开机自启（HKCU Run）→ 放行防火墙 8090 → 启动服务并验证端口 → 输出本机/局域网访问地址</td><td>新机器部署 / 整机迁移，右键管理员运行</td></tr>
+<tr><td><code>install.ps1</code></td><td>install.bat 的 PowerShell 辅助（提权、端口检测、解压等逻辑的承载脚本）</td><td>由 install.bat 自动调用，无需手工运行</td></tr>
+<tr><td><code>pack.ps1</code></td><td><b>发布打包器</b>：清理临时文件 → 建打包目录（台账管理系统V2_迁移包_时间戳\）→ 复制正式文件（server / public / docs / wheels / install.bat 等，<b>不含真实 data 数据目录</b>）→ 压缩为 <code>D:\台账管理系统V2_迁移包_yyyyMMdd_HHmm.zip</code></td><td>本机发布新版本时在项目根目录运行</td></tr>
+<tr><td><code>requirements.txt</code></td><td>Python 依赖清单：Flask 3.1.3、openpyxl 3.1.5、python-docx 1.2.0、lxml 6.1.3 等（wheels\ 内含全部离线包）</td><td>install.bat 安装依赖时读取</td></tr>
+<tr><td><code>start_server.vbs</code></td><td><b>无窗口启动器</b>：设置进程环境变量 TZ_PORT=8090，用 pythonw 后台运行 <code>server\app.py</code>（无黑窗口）；install.bat 会按目标机器路径重写此文件并注册开机自启</td><td>手动重启服务时双击，或开机自启触发</td></tr>
+<tr><td><code>watchdog.py</code></td><td><b>看门狗</b>：每轮检测 127.0.0.1:8090 端口是否可连且存在 server\app.py 的 pythonw 进程；服务掉线则自动拉起并写日志（防止误判双实例）</td><td>可加计划任务周期运行，或手动执行一次</td></tr>
+<tr><td><code>watchdog.log</code></td><td>看门狗运行记录（时间 + "服务正常 / 检测到服务掉线，正在自动拉起…"）</td><td>排查服务是否被自动拉起过</td></tr>
+</table>
+
+<h2>三、代码目录详解</h2>
+<table>
+<tr><th style="width:26%">路径</th><th>作用</th></tr>
+<tr><td><code>server\app.py</code></td><td><b>后端主程序</b>（Flask，约 6200 行，全部路由与业务逻辑）：认证与会话加固（Cookie 签名、登录失败 5 次锁 30 秒）、账号权限分配、仪表盘、打印机台账、耗材全链路（库存区域+库位两级位置/发放/入库/维护/调整/移库/两套模板导入导出）、备品备件（出入库/纸质单联动生成 <code>/api/flows/&lt;fid&gt;/slip</code>）、办公电脑、电脑优化、配件更换（显示器联动/库存联动/四个子标签）、费用统计、记事本、AI 工作台、系统管理（账号/列配置/备份/日志）、CSV 导出公式注入防护 _csv_safe、AI 上传扩展名白名单、访问日志超 5MB 自动轮转、每日备份保留 14 份、每日自动备份线程</td></tr>
+<tr><td><code>server\db.py</code></td><td>数据库连接（DATA_DIR 解析、get_conn 行工厂）与<b>全部建表语句</b>（39 张表，见"四、数据库表清单"）；启动时自动建表，不重置已有数据</td></tr>
+<tr><td><code>server\templates\入库单模板.docx / 出库单模板.docx</code></td><td>备品备件出入库<b>纸质单模板</b>（用户提供，随迁移包分发）；后端按流水用 python-docx 填充生成出入库单 docx 供打印</td></tr>
+<tr><td><code>public\index.html</code></td><td>前端入口页（登录页 + 主框架 DOM + 外链 <code>js/app.js?v=20261023m07</code> 版本号控制浏览器缓存刷新）</td></tr>
+<tr><td><code>public\js\app.js</code></td><td><b>前端全部渲染与交互</b>（单文件约 412KB，当前版本 20261023m07）：统一表格引擎 TZTable（23 张台账表，列头筛选/排序/自定义位置与显隐/关键字搜索/多选批量删除/导出选中 CSV/分页跳转，admin 保存全员同步）、权限控制（viewer 只读）、耗材聚合主列表 + 区域库存展开 + 移库、备件出入库纸质单联动、耗材发放记录编辑、配件更换联动、版本自检（60 秒比对 index.html 版本号，变更自动重载，火狐缓存适配）；旧 enhanceTable/分页器/MutationObserver 仍服务工作台等非台账表，对 data-tz 表自动跳过防叠加</td></tr>
+<tr><td><code>public\css\style.css</code></td><td>全站样式（设计令牌：主色/字号/间距 + 组件：按钮/表格/弹窗/统计卡/侧栏/表单，桌面与移动端布局）</td></tr>
+<tr><td><code>public\vendor\quill\quill.js + quill.snow.css</code></td><td>记事本/富文本编辑器 Quill 离线资源（无外网可用）</td></tr>
+<tr><td><code>wheels\*.whl</code></td><td>Python 依赖离线包（flask/openpyxl/python-docx/lxml/blinker/click/jinja2/werkzeug/markupsafe 等 13 个），install.bat 在无网环境下 <code>pip install --no-index --find-links wheels</code> 使用</td></tr>
+</table>
+
+<h2>四、数据库与数据文件（所有路径）</h2>
+<h3>4.1 数据目录 data\ 全览</h3>
+<table>
+<tr><th style="width:34%">路径</th><th>说明</th><th style="width:16%">生命周期</th></tr>
+<tr><td><code>data\system.db</code></td><td><b>业务主数据库</b>（SQLite 单文件，约 2MB）：全部 39 张表（账号/打印机/耗材/备件/办公电脑/配件/费用/记事本/AI/备份记录等）。<b>备份=复制此文件</b></td><td>长期，须随业务持续备份</td></tr>
+<tr><td><code>data\backup\system_yyyyMMdd_HHmmss.db</code></td><td><b>自动备份</b>（如 system_20261023_101540.db）：服务启动时与每日定时线程执行 do_backup()（SQLite online backup 快照），<b>保留最近 14 份</b>，超出自动删除最旧（BACKUP_KEEP=14）</td><td>滚动保留 14 份</td></tr>
+<tr><td><code>data\system_backup_20261023_before_planA.db</code></td><td><b>迁移前快照</b>：方案甲（耗材区域+库位改造）改库前手动备份，用于功能回滚</td><td>保留不删（方案甲回滚点）</td></tr>
+<tr><td><code>data\system_backup_20261023_before_con_pos.db</code></td><td><b>迁移前快照</b>：耗材库位方案准备阶段改库前备份</td><td>保留不删</td></tr>
+<tr><td><code>data\.secret_key</code></td><td>Flask Session 签名密钥文件（启动时若无则自动生成，存 data 目录保证部署/重启不丢会话）</td><td>长期，勿删</td></tr>
+<tr><td><code>data\access.log</code></td><td>访问日志（每次 HTTP 请求一行：时间/来源 IP/方法/路径/状态码/耗时）；<b>超 5MB 启动时自动轮转归档为 data\access_时间戳.log</b></td><td>当前日志</td></tr>
+<tr><td><code>data\error.log</code></td><td>运行错误日志（后端异常 traceback）</td><td>排查错误用</td></tr>
+<tr><td><code>data\uploads\</code></td><td>记事本/通用上传文件（原文件名保存）</td><td>随业务增长</td></tr>
+<tr><td><code>data\uploads\ai\</code></td><td>AI 工作台对话上传文件（AI 上传接口，扩展名白名单过滤 html/svg）</td><td>随业务增长</td></tr>
+<tr><td><code>data\备件库存预填模板_20261015.xlsx</code></td><td>用户提供的备件库存预填模板（备品备件导入格式参考，用户原始资料）</td><td>保留（用户资产，不打进迁移包）</td></tr>
+</table>
+<p>说明：<b>迁移包不含 data\</b>（pack.ps1 只复制 server/public/docs/wheels 等，真实业务数据留在本机；新机器安装后 system.db 为空库，需从旧机复制 data\system.db 或备份文件迁移）。</p>
+
+<h3>4.2 数据库表清单（data\system.db 内 39 张表，按模块分组）</h3>
+<table>
+<tr><th style="width:24%">模块</th><th>表名</th><th>用途</th></tr>
+<tr><td>账号权限</td><td><code>users</code> / <code>user_settings</code> / <code>col_settings</code></td><td>用户账号与权限（perms JSON）、用户级列配置、全局列配置（admin 保存全员同步）</td></tr>
+<tr><td>打印机</td><td><code>printers</code> / <code>printer_repairs</code></td><td>打印机台账、维修记录</td></tr>
+<tr><td rowspan="5">耗材</td><td><code>consumables</code></td><td>耗材种类主数据（96 类唯一；stock 为合计冗余列，权威值=区域库存之和）</td></tr>
+<tr><td><code>consumable_stocks</code></td><td>耗材区域库存分表（consumable_id×region(中控/办公楼)×storage(库位)→stock），移库/调整/发放/入库全链路操作对象</td></tr>
+<tr><td><code>consumable_issues</code></td><td>发放记录（含 region；支持编辑联动库存）</td></tr>
+<tr><td><code>consumable_stock_in</code></td><td>入库记录（含 region+storage，删除按区域回扣）</td></tr>
+<tr><td><code>consumable_adjusts</code> / <code>consumable_maintenance</code></td><td>调整/移库流水（含 region+storage）、维护记录</td></tr>
+<tr><td>备品备件</td><td><code>spare_items</code> / <code>spare_stocks</code> / <code>spare_flows</code> / <code>spare_adjusts</code></td><td>备件主数据、库存（数量+单位+位置）、出入库流水（纸质单联动数据源）、调整流水</td></tr>
+<tr><td>办公电脑</td><td><code>computers</code> / <code>computer_repairs</code></td><td>办公电脑台账、维修记录</td></tr>
+<tr><td rowspan="5">配件更换</td><td><code>pc_replace</code></td><td>配件更换记录（显示器序列号联动等）</td></tr>
+<tr><td><code>pc_monitors</code> / <code>pc_hall_computers</code></td><td>显示器台账、中控操作大厅电脑台账</td></tr>
+<tr><td><code>pc_part_stock</code> / <code>pc_part_stock_in</code></td><td>配件库存、配件入库记录</td></tr>
+<tr><td><code>pc_upgrades</code> / <code>pc_upgrade_items</code> / <code>pc_parts</code> / <code>pc_flows</code> / <code>pc_adjusts</code></td><td>电脑优化记录及其配件明细/配件目录/优化流水/调整流水</td></tr>
+<tr><td>费用统计</td><td><code>price_list</code> / <code>budgets</code></td><td>价格目录、预算记录</td></tr>
+<tr><td>盘点</td><td><code>stocktakes</code> / <code>stocktake_items</code></td><td>盘点单与盘点明细</td></tr>
+<tr><td>AI 工作台</td><td><code>ai_records</code> / <code>ai_knowledge</code> / <code>ai_settings</code> / <code>ai_requests</code> / <code>ai_conversations</code> / <code>ai_messages</code></td><td>AI 问答记录、知识库（对话自动注入）、模型配置、请求日志、会话与消息</td></tr>
+<tr><td>系统</td><td><code>sys_logs</code> / <code>backup_logs</code></td><td>操作日志、备份记录（备份文件名/大小/结果）</td></tr>
+</table>
+
+<h2>五、文档目录</h2>
+<table>
+<tr><th style="width:34%">文件</th><th>作用</th></tr>
+<tr><td><code>docs\需求与功能实现清单.html</code></td><td>全部功能需求与实现说明（按模块表格）、历次版本更新记录（m01~m07）</td></tr>
+<tr><td><code>docs\部署与维护说明.html</code></td><td>部署步骤、服务启停、端口/防火墙/开机自启、当前版本与版本演进、升级迁移方式</td></tr>
+<tr><td><code>docs\系统文件说明及配置文档.html</code></td><td>本文档：完整目录树、每个文件作用、数据库全部路径与 39 张表清单、关键配置、备份恢复、改数方法</td></tr>
+<tr><td><code>docs\故障处理手册.html</code></td><td>常见故障排查（服务起不来/端口占用/火狐缓存/密码重置/数据修复等）</td></tr>
+<tr><td><code>docs\安全漏扫与验证测试报告.html</code></td><td>安全漏洞扫描结果与修复记录、功能验证测试清单</td></tr>
+<tr><td><code>软著申请材料\</code>（6 个文件）</td><td>软件著作权申请：源代码文档、说明书、申请表填写信息汇总（各 .docx+.pdf）</td></tr>
+</table>
+
+<h2>六、关键配置</h2>
+<table>
+<tr><th style="width:20%">配置项</th><th style="width:26%">位置</th><th>说明</th></tr>
+<tr><td>端口 8090</td><td>app.py 末尾 app.run(port=8090)；或环境变量 TZ_PORT</td><td>Flask 监听端口；局域网访问用 <code>http://本机IP:8090</code>，需防火墙放行（install.bat 已自动添加 TaiZhangSystem8090 规则）</td></tr>
+<tr><td>登录锁定</td><td>app.py 约 221 行</td><td>同一账号失败 5 次锁定 30 秒</td></tr>
+<tr><td>Session 密钥</td><td>data\.secret_key</td><td>启动自动生成/读取；删除会导致所有在线会话失效</td></tr>
+<tr><td>备份保留数</td><td>app.py BACKUP_KEEP = 14</td><td>backup 目录滚动保留最近 14 份自动备份</td></tr>
+<tr><td>访问日志轮转</td><td>app.py 启动段</td><td>access.log 超 5MB 自动归档为 access_时间戳.log</td></tr>
+<tr><td>AI 模型配置</td><td>网页 ⚙️ 系统管理 → AI 设置</td><td>多模型列表存 ai_settings 表</td></tr>
+<tr><td>知识库</td><td>AI 工作台 → 知识库</td><td>存 ai_knowledge，每次对话自动注入</td></tr>
+<tr><td>默认管理员</td><td>admin / admin123</td><td>首次部署登录后立即改密码</td></tr>
+<tr><td>开机自启</td><td>注册表 HKCU\...\Run 键 TaiZhangSystemV2</td><td>install.bat 自动写入 start_server.vbs 自启项</td></tr>
+</table>
+
+<h2>七、数据备份与恢复</h2>
+<h3>7.1 自动备份</h3>
+<p>系统在服务启动时与每日定时线程执行自动备份，产物为 <code>data\backup\system_yyyyMMdd_HHmmss.db</code>（SQLite 在线备份，无需停服），<b>保留最近 14 份</b>，更早自动删除。备份记录（文件名/大小/结果）写入 <code>backup_logs</code> 表，可在 系统管理 → 备份管理 查看与手动备份（<code>/api/backup</code>、<code>/api/backups</code>）。</p>
+<h3>7.2 手动快照（回滚点）</h3>
+<p>重大改造前手工复制 system.db 到 <code>data\system_backup_日期_before_事项.db</code>。当前保留：<code>system_backup_20261023_before_planA.db</code>（耗材区域+库位改造前）、<code>system_backup_20261023_before_con_pos.db</code>（库位方案准备前）。</p>
+<h3>7.3 恢复方法</h3>
+<ol>
+<li>停止服务（任务管理器结束 pythonw.exe 中运行 server\app.py 的进程，或任务栏图标右键退出）</li>
+<li>把选中的备份文件复制覆盖 <code>data\system.db</code>（先备份当前 system.db 以防万一）</li>
+<li>重新启动服务（start_server.vbs 或开机自启）</li>
+</ol>
+
+<h2>八、修改数据方法</h2>
+<ul>
+<li>业务数据（台账/库存/发放/出入库等）：网页对应模块增删改、批量导入导出（耗材/备件/打印机模板导入导出）</li>
+<li>列顺序/显隐：表格表头右键"列设置"，admin 保存后全员同步</li>
+<li>用户密码重置：见《故障处理手册》（管理员在系统管理-账号管理重置）</li>
+<li>直接改库：用 DB Browser for SQLite 打开 data\system.db（改前先复制一份备份；改后重启服务；合计库存等冗余值由系统自动重算，勿手工改错）</li>
+</ul>
+
+<h2>九、常见问题快速定位</h2>
+<table>
+<tr><th style="width:30%">问题</th><th>排查入口</th></tr>
+<tr><td>网页打不开/服务未启动</td><td>netstat -ano | findstr 8090 看监听；双击 start_server.vbs 手动启动；看 watchdog.log 是否自动拉起过</td></tr>
+<tr><td>前端功能异常（页面空白/按钮无效）</td><td>版本自检会自动重载；强制刷新 Ctrl+F5；确认 <code>public\js\app.js</code> 顶部 CUR 与 <code>index.html</code> 的 ?v= 一致（每次改代码两处同步递增）</td></tr>
+<tr><td>需要回滚数据库</td><td>用 data\backup\ 最近备份或 20261023 迁移前快照覆盖 data\system.db 后重启</td></tr>
+<tr><td>磁盘空间被日志占满</td><td>data\access_*.log 归档文件可手动删除（当前 access.log 保留）；backup 目录会自动保持 14 份</td></tr>
+<tr><td>局域网其他电脑访问不了</td><td>防火墙规则 TaiZhangSystem8090 是否放行；用 http://本机IP:8090 而非 127.0.0.1</td></tr>
+</table>
+</body></html>
